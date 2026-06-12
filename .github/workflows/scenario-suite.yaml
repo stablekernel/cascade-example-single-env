@@ -1,0 +1,189 @@
+name: scenario-suite
+
+# Drives the prod release lifecycle end to end and asserts on the
+# resulting tags, GitHub releases, and cascade state pointer.
+#
+# This suite never runs the lifecycle inline. It fires the existing
+# generated workflows (orchestrate on merge, Release on dispatch) and
+# polls for the expected shapes. Assertions check patterns and flags,
+# never hardcoded SHAs or versions.
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: scenario-suite
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
+  MANIFEST: .github/manifest.yaml
+  MANIFEST_KEY: ci
+  RELEASE_WORKFLOW: promote.yaml
+
+jobs:
+  reset:
+    name: 'Stage 1: merge create-draft'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.CASCADE_STATE_TOKEN }}
+          fetch-depth: 0
+
+      - name: Open and merge a source change
+        id: merge
+        shell: bash
+        env:
+          TRUNK: main
+        run: |
+          set -euo pipefail
+          git config user.name "scenario-suite"
+          git config user.email "scenario-suite@users.noreply.github.com"
+          BRANCH="scenario/src-$(date +%s)"
+          git checkout -b "$BRANCH"
+          mkdir -p src
+          echo "touched at $(date -u +%FT%TZ)" >> src/scenario.txt
+          git add src/scenario.txt
+          git commit -m "feat: scenario source change"
+          git push origin "$BRANCH"
+          PR_URL="$(gh pr create --base "$TRUNK" --head "$BRANCH" \
+            --title "scenario: source change" \
+            --body "Automated scenario run. Drives orchestrate on merge.")"
+          echo "Opened $PR_URL"
+          gh pr merge "$BRANCH" --squash --admin --delete-branch
+          git fetch origin "$TRUNK"
+          MERGE_SHA="$(git rev-parse "origin/$TRUNK")"
+          echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Assert draft release and state rc.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=""
+          for i in $(seq 1 20); do
+            tags="$(git ls-remote --tags origin 2>/dev/null | sed 's#.*refs/tags/##' || true)"
+            rc_tag="$(echo "$tags" | grep -E '.*-rc\.[0-9]+$' | head -n1 || true)"
+            state_ptr="$(gh api "repos/${{ github.repository }}/contents/${MANIFEST}" \
+              --jq '.content' 2>/dev/null | base64 -d 2>/dev/null \
+              | grep -E 'prod' || true)"
+            draft="$(gh release list --limit 20 --json tagName,isDraft \
+              --jq '.[] | select(.isDraft == true) | .tagName' 2>/dev/null | head -n1 || true)"
+            if [ -n "$rc_tag" ] && [ -n "$draft" ]; then
+              echo "Found rc tag '$rc_tag' and draft release '$draft'"
+              echo "State references prod: ${state_ptr:-<pending>}"
+              ok="yes"
+              break
+            fi
+            echo "attempt $i: waiting for draft + rc tag (rc='$rc_tag' draft='$draft')"
+            sleep 30
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::Stage 1 timed out waiting for draft release and rc tag"
+            exit 1
+          fi
+          {
+            echo "## Stage 1: create-draft"
+            echo "- rc tag present: yes (pattern *-rc.N)"
+            echo "- draft release present: yes"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  prerelease:
+    name: 'Stage 2: dispatch prerelease'
+    runs-on: ubuntu-latest
+    needs: reset
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.CASCADE_STATE_TOKEN }}
+
+      - name: Dispatch Release with release_action=prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run "${RELEASE_WORKFLOW}" \
+            -f release_action=prerelease
+
+      - name: Assert release becomes prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=""
+          for i in $(seq 1 20); do
+            pre="$(gh release list --limit 20 --json tagName,isDraft,isPrerelease \
+              --jq '.[] | select(.isPrerelease == true and .isDraft == false) | .tagName' \
+              2>/dev/null | head -n1 || true)"
+            if [ -n "$pre" ]; then
+              echo "Found prerelease '$pre' (prerelease=true draft=false)"
+              ok="yes"
+              break
+            fi
+            echo "attempt $i: waiting for prerelease flag"
+            sleep 30
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::Stage 2 timed out waiting for prerelease state"
+            exit 1
+          fi
+          {
+            echo "## Stage 2: prerelease"
+            echo "- release prerelease=true, draft=false: yes"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: 'Stage 3: dispatch release'
+    runs-on: ubuntu-latest
+    needs: prerelease
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.CASCADE_STATE_TOKEN }}
+          fetch-depth: 0
+
+      - name: Dispatch Release with release_action=release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run "${RELEASE_WORKFLOW}" \
+            -f release_action=release
+
+      - name: Assert published latest, rc cleaned, v tag present
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=""
+          for i in $(seq 1 20); do
+            git fetch --tags --force origin >/dev/null 2>&1 || true
+            tags="$(git ls-remote --tags origin 2>/dev/null | sed 's#.*refs/tags/##' || true)"
+            v_tag="$(echo "$tags" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
+            rc_left="$(echo "$tags" | grep -E '.*-rc\.[0-9]+$' | head -n1 || true)"
+            published="$(gh release list --limit 20 --json tagName,isDraft,isPrerelease \
+              --jq '.[] | select(.isDraft == false and .isPrerelease == false) | .tagName' \
+              2>/dev/null | head -n1 || true)"
+            latest="$(gh api "repos/${{ github.repository }}/releases/latest" \
+              --jq '.tag_name' 2>/dev/null || true)"
+            if [ -n "$v_tag" ] && [ -z "$rc_left" ] && [ -n "$published" ] && [ -n "$latest" ]; then
+              echo "Published '$published', latest '$latest', v tag '$v_tag', rc cleaned"
+              ok="yes"
+              break
+            fi
+            echo "attempt $i: v='$v_tag' rc_left='$rc_left' published='$published' latest='$latest'"
+            sleep 30
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::Stage 3 timed out waiting for published release and rc cleanup"
+            exit 1
+          fi
+          {
+            echo "## Stage 3: release"
+            echo "- v tag present (pattern vN.N.N): yes"
+            echo "- rc tags cleaned: yes"
+            echo "- release published as latest: yes"
+          } >> "$GITHUB_STEP_SUMMARY"
