@@ -1,0 +1,22 @@
+name: deploy-app
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: false
+        type: string
+      sha:
+        required: false
+        type: string
+      version:
+        required: false
+        type: string
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - id: deploy
+        shell: bash
+        run: |
+          echo "Deploying app version=${{ inputs.version }} sha=${{ inputs.sha }} env=${{ inputs.environment }}"
+          sleep 2

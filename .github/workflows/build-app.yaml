@@ -1,0 +1,28 @@
+name: build-app
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Target environment for the build
+        required: false
+        type: string
+      sha:
+        description: Commit SHA being built
+        required: false
+        type: string
+    outputs:
+      artifact:
+        description: Identifier for the built application artifact
+        value: ${{ jobs.build.outputs.artifact }}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact: ${{ steps.build.outputs.artifact }}
+    steps:
+      - id: build
+        shell: bash
+        run: |
+          echo "Building app for ${{ inputs.sha }}"
+          sleep 2
+          echo "artifact=app-${{ inputs.sha }}" >> "$GITHUB_OUTPUT"
