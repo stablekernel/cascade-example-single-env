@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
+  GH_TOKEN: ${{ secrets.CASCADE_STATE_TEST_TOKEN }}
   MANIFEST: .github/manifest.yaml
   MANIFEST_KEY: ci
   RELEASE_WORKFLOW: promote.yaml
@@ -35,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          token: ${{ secrets.CASCADE_STATE_TOKEN }}
+          token: ${{ secrets.CASCADE_STATE_TEST_TOKEN }}
           fetch-depth: 0
 
       - name: Open and merge a source change
@@ -102,7 +102,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          token: ${{ secrets.CASCADE_STATE_TOKEN }}
+          token: ${{ secrets.CASCADE_STATE_TEST_TOKEN }}
 
       - name: Dispatch Release with release_action=prerelease
         shell: bash
@@ -144,7 +144,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          token: ${{ secrets.CASCADE_STATE_TOKEN }}
+          token: ${{ secrets.CASCADE_STATE_TEST_TOKEN }}
           fetch-depth: 0
 
       - name: Dispatch Release with release_action=release

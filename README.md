@@ -39,5 +39,5 @@ cascade generate-workflow --config .github/manifest.yaml --force
    mark it latest, and clean up the release-candidate tags.
 
 The `scenario-suite` workflow runs the same three stages on a schedule and
-asserts the expected tag and release shapes. It needs a `CASCADE_STATE_TOKEN`
+asserts the expected tag and release shapes. It needs a `CASCADE_STATE_TEST_TOKEN`
 repository secret.
