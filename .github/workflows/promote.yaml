@@ -232,7 +232,7 @@ jobs:
       - name: Update Latest Release State
         if: ${{ github.event.inputs.dry_run != 'true' && needs.release.result == 'success' }}
         env:
-          GH_TOKEN: ${{ secrets.CASCADE_STATE_TEST_TOKEN }}
+          GH_TOKEN: ${{ secrets.CASCADE_STATE_TOKEN }}
           SEMVER_TAG: ${{ needs.preflight.outputs.semver_tag }}
           SOURCE_SHA: ${{ needs.preflight.outputs.source_sha }}
         run: |
