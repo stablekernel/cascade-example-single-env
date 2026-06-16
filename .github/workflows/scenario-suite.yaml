@@ -55,13 +55,31 @@ jobs:
           git commit -m "feat: scenario source change"
           git push origin "$BRANCH"
           PR_URL="$(gh pr create --base "$TRUNK" --head "$BRANCH" \
-            --title "scenario: source change" \
+            --title "feat: scenario source change" \
             --body "Automated scenario run. Drives orchestrate on merge.")"
           echo "Opened $PR_URL"
-          gh pr merge "$BRANCH" --squash --admin --delete-branch
+          gh pr merge "$BRANCH" --squash --delete-branch
           git fetch origin "$TRUNK"
           MERGE_SHA="$(git rev-parse "origin/$TRUNK")"
           echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for orchestrate run on merge SHA
+        shell: bash
+        env:
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+        run: |
+          set -euo pipefail
+          RUN_ID=""
+          for i in $(seq 1 30); do
+            RUN_ID="$(gh run list --workflow=orchestrate.yaml --branch=main \
+              --json databaseId,headSha,status \
+              --jq ".[] | select(.headSha==\"$MERGE_SHA\") | .databaseId" | head -n1 || true)"
+            [ -n "$RUN_ID" ] && break
+            echo "attempt $i: no orchestrate run for $MERGE_SHA yet"
+            sleep 10
+          done
+          [ -n "$RUN_ID" ] || { echo "::error::no orchestrate run found for $MERGE_SHA"; exit 1; }
+          gh run watch "$RUN_ID" --exit-status
 
       - name: Assert draft release and state rc.0
         shell: bash
