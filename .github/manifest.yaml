@@ -16,4 +16,14 @@ ci:
       - name: app
         workflow: .github/workflows/deploy-app.yaml
         triggers: []
-  state: {}
+  state:
+    prod:
+      sha: 9804bdd8d1884c524d67c3a9a8505223ac8daf0f
+      version: v0.1.0-rc.0
+      committed_at: "2026-06-16T23:01:33Z"
+      committed_by: joshua-temple
+      deploys:
+        app:
+          sha: 9804bdd8d1884c524d67c3a9a8505223ac8daf0f
+          deployed_at: "2026-06-16T23:01:33Z"
+          deployed_by: joshua-temple
