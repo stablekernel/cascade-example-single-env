@@ -71,7 +71,6 @@ jobs:
     with:
       environment: ${{ github.event.inputs.environment || 'prod' }}
       sha: ${{ needs.setup.outputs.head_sha }}
-    secrets: inherit
 
   deploy-app:
     name: Deploy (app)
@@ -82,7 +81,6 @@ jobs:
     with:
       environment: ${{ github.event.inputs.environment || 'prod' }}
       sha: ${{ needs.setup.outputs.head_sha }}
-    secrets: inherit
 
   finalize:
     name: Finalize
