@@ -90,7 +90,7 @@ jobs:
             sleep 10
           done
           [ -n "$RUN_ID" ] || { echo "::error::no orchestrate run found for $MERGE_SHA"; exit 1; }
-          gh run watch "$RUN_ID" --exit-status
+          gh run watch "$RUN_ID" --exit-status --interval 30
 
       - name: Assert draft release and state rc.0
         shell: bash
@@ -145,7 +145,7 @@ jobs:
             sleep 10
           done
           [ -n "$RUN_ID" ] || { echo "::error::no ${RELEASE_WORKFLOW} run found after prerelease dispatch"; exit 1; }
-          gh run watch "$RUN_ID" --exit-status
+          gh run watch "$RUN_ID" --exit-status --interval 30
 
       - name: Assert release becomes prerelease
         shell: bash
@@ -205,7 +205,7 @@ jobs:
             sleep 10
           done
           [ -n "$RUN_ID" ] || { echo "::error::no ${RELEASE_WORKFLOW} run found after release dispatch"; exit 1; }
-          gh run watch "$RUN_ID" --exit-status
+          gh run watch "$RUN_ID" --exit-status --interval 30
 
       - name: Assert published latest, rc cleaned, v tag present
         id: published
