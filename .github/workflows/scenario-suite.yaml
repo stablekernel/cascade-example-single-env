@@ -81,23 +81,23 @@ jobs:
         run: |
           set -euo pipefail
           RUN_ID=""
-          for i in $(seq 1 30); do
+          for i in $(seq 1 6); do
             RUN_ID="$(gh run list --workflow=orchestrate.yaml --branch=main \
               --json databaseId,headSha,status \
               --jq ".[] | select(.headSha==\"$MERGE_SHA\") | .databaseId" | head -n1 || true)"
             [ -n "$RUN_ID" ] && break
             echo "attempt $i: no orchestrate run for $MERGE_SHA yet"
-            sleep 10
+            sleep 60
           done
           [ -n "$RUN_ID" ] || { echo "::error::no orchestrate run found for $MERGE_SHA"; exit 1; }
-          gh run watch "$RUN_ID" --exit-status --interval 30
+          gh run watch "$RUN_ID" --exit-status --interval 60
 
       - name: Assert draft release and state rc.0
         shell: bash
         run: |
           set -euo pipefail
           ok=""
-          for i in $(seq 1 20); do
+          for i in $(seq 1 10); do
             tags="$(git ls-remote --tags origin 2>/dev/null | sed 's#.*refs/tags/##' || true)"
             rc_tag="$(echo "$tags" | grep -E '.*-rc\.[0-9]+$' | head -n1 || true)"
             draft="$(gh release list --limit 20 --json tagName,isDraft \
@@ -108,7 +108,7 @@ jobs:
               break
             fi
             echo "attempt $i: waiting for draft + rc tag (rc='$rc_tag' draft='$draft')"
-            sleep 30
+            sleep 60
           done
           if [ -z "$ok" ]; then
             echo "::error::Stage 1 timed out waiting for draft release and rc tag"
@@ -137,22 +137,22 @@ jobs:
           gh workflow run "${RELEASE_WORKFLOW}" \
             -f release_action=prerelease
           RUN_ID=""
-          for i in $(seq 1 30); do
+          for i in $(seq 1 6); do
             RUN_ID="$(gh run list --workflow="${RELEASE_WORKFLOW}" --created ">=$TS" \
               --json databaseId --jq '.[0].databaseId')"
             [ -n "$RUN_ID" ] && break
             echo "attempt $i: no ${RELEASE_WORKFLOW} run dispatched since $TS yet"
-            sleep 10
+            sleep 60
           done
           [ -n "$RUN_ID" ] || { echo "::error::no ${RELEASE_WORKFLOW} run found after prerelease dispatch"; exit 1; }
-          gh run watch "$RUN_ID" --exit-status --interval 30
+          gh run watch "$RUN_ID" --exit-status --interval 60
 
       - name: Assert release becomes prerelease
         shell: bash
         run: |
           set -euo pipefail
           ok=""
-          for i in $(seq 1 20); do
+          for i in $(seq 1 10); do
             pre="$(gh release list --limit 20 --json tagName,isDraft,isPrerelease \
               --jq '.[] | select(.isPrerelease == true and .isDraft == false) | .tagName' \
               2>/dev/null | head -n1 || true)"
@@ -162,7 +162,7 @@ jobs:
               break
             fi
             echo "attempt $i: waiting for prerelease flag"
-            sleep 30
+            sleep 60
           done
           if [ -z "$ok" ]; then
             echo "::error::Stage 2 timed out waiting for prerelease state"
@@ -197,15 +197,15 @@ jobs:
           gh workflow run "${RELEASE_WORKFLOW}" \
             -f release_action=release
           RUN_ID=""
-          for i in $(seq 1 30); do
+          for i in $(seq 1 6); do
             RUN_ID="$(gh run list --workflow="${RELEASE_WORKFLOW}" --created ">=$TS" \
               --json databaseId --jq '.[0].databaseId')"
             [ -n "$RUN_ID" ] && break
             echo "attempt $i: no ${RELEASE_WORKFLOW} run dispatched since $TS yet"
-            sleep 10
+            sleep 60
           done
           [ -n "$RUN_ID" ] || { echo "::error::no ${RELEASE_WORKFLOW} run found after release dispatch"; exit 1; }
-          gh run watch "$RUN_ID" --exit-status --interval 30
+          gh run watch "$RUN_ID" --exit-status --interval 60
 
       - name: Assert published latest, rc cleaned, v tag present
         id: published
@@ -214,7 +214,7 @@ jobs:
           set -euo pipefail
           ok=""
           v_tag=""
-          for i in $(seq 1 20); do
+          for i in $(seq 1 10); do
             git fetch --tags --force origin >/dev/null 2>&1 || true
             tags="$(git ls-remote --tags origin 2>/dev/null | sed 's#.*refs/tags/##' || true)"
             v_tag="$(echo "$tags" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
@@ -230,7 +230,7 @@ jobs:
               break
             fi
             echo "attempt $i: v='$v_tag' rc_left='$rc_left' published='$published' latest='$latest'"
-            sleep 30
+            sleep 60
           done
           if [ -z "$ok" ]; then
             echo "::error::Stage 3 timed out waiting for published release and rc cleanup"
@@ -278,7 +278,7 @@ jobs:
           STATE_VERSION=""
           REL_VERSION=""
           REL_SHA=""
-          for i in $(seq 1 30); do
+          for i in $(seq 1 6); do
             git pull origin main --quiet || true
             ENV_JSON="$(cascade status env prod --config "$MANIFEST" --key "$MANIFEST_KEY" --json)"
             ALL_JSON="$(cascade status --config "$MANIFEST" --key "$MANIFEST_KEY" --json)"
@@ -293,7 +293,7 @@ jobs:
               break
             fi
             echo "attempt $i: state.sha='$STATE_SHA' latest_release.version='$REL_VERSION' latest_release.sha='$REL_SHA'"
-            sleep 10
+            sleep 60
           done
 
           if [ -z "$ok" ]; then
