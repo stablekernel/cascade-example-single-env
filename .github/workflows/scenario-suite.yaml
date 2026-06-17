@@ -135,8 +135,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           gh workflow run "${RELEASE_WORKFLOW}" \
             -f release_action=prerelease
+          RUN_ID=""
+          for i in $(seq 1 30); do
+            RUN_ID="$(gh run list --workflow="${RELEASE_WORKFLOW}" --created ">=$TS" \
+              --json databaseId --jq '.[0].databaseId')"
+            [ -n "$RUN_ID" ] && break
+            echo "attempt $i: no ${RELEASE_WORKFLOW} run dispatched since $TS yet"
+            sleep 10
+          done
+          [ -n "$RUN_ID" ] || { echo "::error::no ${RELEASE_WORKFLOW} run found after prerelease dispatch"; exit 1; }
+          gh run watch "$RUN_ID" --exit-status
 
       - name: Assert release becomes prerelease
         shell: bash
@@ -178,8 +189,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           gh workflow run "${RELEASE_WORKFLOW}" \
             -f release_action=release
+          RUN_ID=""
+          for i in $(seq 1 30); do
+            RUN_ID="$(gh run list --workflow="${RELEASE_WORKFLOW}" --created ">=$TS" \
+              --json databaseId --jq '.[0].databaseId')"
+            [ -n "$RUN_ID" ] && break
+            echo "attempt $i: no ${RELEASE_WORKFLOW} run dispatched since $TS yet"
+            sleep 10
+          done
+          [ -n "$RUN_ID" ] || { echo "::error::no ${RELEASE_WORKFLOW} run found after release dispatch"; exit 1; }
+          gh run watch "$RUN_ID" --exit-status
 
       - name: Assert published latest, rc cleaned, v tag present
         shell: bash
