@@ -101,10 +101,10 @@ jobs:
           echo "semver_tag=$SEMVER_TAG" >> "$GITHUB_OUTPUT"
           echo "::notice::Semver tag: $SEMVER_TAG (from $SOURCE_VERSION)"
       - name: Setup CLI
-        uses: stablekernel/cascade/.github/actions/setup-cli@v0.2.1
+        uses: stablekernel/cascade/.github/actions/setup-cli@v0.3.0-rc.20
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          version: v0.2.1
+          token: ${{ secrets.CASCADE_STATE_TOKEN }}
+          version: v0.3.0-rc.20
       - name: Check Breaking Changes
         id: check
         env:
@@ -165,10 +165,10 @@ jobs:
         with:
           fetch-depth: 0
       - name: Setup CLI
-        uses: stablekernel/cascade/.github/actions/setup-cli@v0.2.1
+        uses: stablekernel/cascade/.github/actions/setup-cli@v0.3.0-rc.20
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          version: v0.2.1
+          token: ${{ secrets.CASCADE_STATE_TOKEN }}
+          version: v0.3.0-rc.20
       - name: Generate Changelog
         id: changelog
         env:
@@ -196,7 +196,7 @@ jobs:
           sha: ${{ needs.preflight.outputs.source_sha }}
           tag: ${{ needs.preflight.outputs.semver_tag }}
           changelog: ${{ steps.changelog.outputs.changelog }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CASCADE_STATE_TOKEN }}
       - name: Create Prerelease
         if: ${{ github.event.inputs.release_action == 'prerelease' }}
         uses: ./.github/actions/manage-release
@@ -208,7 +208,7 @@ jobs:
           tag: ${{ needs.preflight.outputs.source_version }}
           new_tag: ${{ needs.preflight.outputs.semver_tag }}
           changelog: ${{ steps.changelog.outputs.changelog }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CASCADE_STATE_TOKEN }}
       - name: Publish Release
         if: ${{ github.event.inputs.release_action == 'release' }}
         uses: ./.github/actions/manage-release
@@ -220,7 +220,7 @@ jobs:
           tag: ${{ needs.preflight.outputs.semver_tag }}
           delete_tag: ${{ needs.preflight.outputs.source_version }}
           changelog: ${{ steps.changelog.outputs.changelog }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CASCADE_STATE_TOKEN }}
 
   finalize:
     name: Finalize
