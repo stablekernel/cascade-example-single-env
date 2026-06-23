@@ -29,6 +29,6 @@ ci:
           deployed_by: joshua-temple
   latest_release:
     version: v0.1.0
-    sha: b2e9572085ec5491a8a59818306075ff26a0ea4e
-    released_on: "2026-06-23T06:47:29Z"
+    sha: e756d3127f9bf84ff8156645230f41c262977e5c
+    released_on: "2026-06-23T16:04:00Z"
     released_by: joshua-temple
