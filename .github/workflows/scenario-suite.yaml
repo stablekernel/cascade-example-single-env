@@ -34,7 +34,24 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       merge_sha: ${{ steps.merge.outputs.merge_sha }}
+      # Captured before anything is dispatched. The reconcile job enumerates
+      # every run this repo produced at or after this instant and fails if any
+      # is unaccounted for in the ledger. Recorded first so no run the suite
+      # causes can fall outside the window.
+      window_start: ${{ steps.window.outputs.window_start }}
     steps:
+      # The reconcile window opens here, before the first PR merge. Every run
+      # the suite goes on to cause (orchestrate on merge, both Release
+      # dispatches) lands at or after this timestamp, so reconcile sees them.
+      - name: Open reconcile window
+        id: window
+        shell: bash
+        run: |
+          set -euo pipefail
+          WINDOW_START="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "window_start=$WINDOW_START" >> "$GITHUB_OUTPUT"
+          echo "reconcile window opened at $WINDOW_START"
+
       - uses: actions/checkout@v6
         with:
           token: ${{ secrets.CASCADE_STATE_TOKEN }}
@@ -75,6 +92,7 @@ jobs:
           echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Wait for orchestrate run on merge SHA
+        id: orchestrate
         shell: bash
         env:
           MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
@@ -90,7 +108,20 @@ jobs:
             sleep 60
           done
           [ -n "$RUN_ID" ] || { echo "::error::no orchestrate run found for $MERGE_SHA"; exit 1; }
+          # Surface the resolved run id so the next step can register it into the
+          # fleet ledger before we block on it.
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
           gh run watch "$RUN_ID" --exit-status --interval 60
+
+      # Register the orchestrate run into the fleet ledger. upload: true so this
+      # job's ledger reaches the reconcile job as an artifact (multi-job suite).
+      - name: Register orchestrate run
+        uses: stablekernel/cascade/.github/actions/register-run@main
+        with:
+          run-id: ${{ steps.orchestrate.outputs.run_id }}
+          expected-conclusion: success
+          reason: stage1-orchestrate-on-merge
+          upload: 'true'
 
       - name: Assert draft release and state rc.0
         shell: bash
@@ -130,6 +161,7 @@ jobs:
           token: ${{ secrets.CASCADE_STATE_TOKEN }}
 
       - name: Dispatch Release with release_action=prerelease
+        id: dispatch
         shell: bash
         run: |
           set -euo pipefail
@@ -145,7 +177,19 @@ jobs:
             sleep 60
           done
           [ -n "$RUN_ID" ] || { echo "::error::no ${RELEASE_WORKFLOW} run found after prerelease dispatch"; exit 1; }
+          # Surface the resolved run id so the next step can register it into the
+          # fleet ledger before we block on it.
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
           gh run watch "$RUN_ID" --exit-status --interval 60
+
+      # Register the prerelease Release run into the fleet ledger.
+      - name: Register prerelease Release run
+        uses: stablekernel/cascade/.github/actions/register-run@main
+        with:
+          run-id: ${{ steps.dispatch.outputs.run_id }}
+          expected-conclusion: success
+          reason: stage2-release-prerelease
+          upload: 'true'
 
       - name: Assert release becomes prerelease
         shell: bash
@@ -190,6 +234,7 @@ jobs:
           version: v0.2.1
 
       - name: Dispatch Release with release_action=release
+        id: dispatch
         shell: bash
         run: |
           set -euo pipefail
@@ -205,7 +250,19 @@ jobs:
             sleep 60
           done
           [ -n "$RUN_ID" ] || { echo "::error::no ${RELEASE_WORKFLOW} run found after release dispatch"; exit 1; }
+          # Surface the resolved run id so the next step can register it into the
+          # fleet ledger before we block on it.
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
           gh run watch "$RUN_ID" --exit-status --interval 60
+
+      # Register the publish Release run into the fleet ledger.
+      - name: Register publish Release run
+        uses: stablekernel/cascade/.github/actions/register-run@main
+        with:
+          run-id: ${{ steps.dispatch.outputs.run_id }}
+          expected-conclusion: success
+          reason: stage3-release-publish
+          upload: 'true'
 
       - name: Assert published latest, rc cleaned, v tag present
         id: published
@@ -325,3 +382,26 @@ jobs:
             echo "- latest_release.version == published $EXPECTED_VERSION: yes"
             echo "- latest_release.sha == trunk merge SHA: yes"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------
+  # Reconcile gate: structural coverage backstop. The per-stage asserts above
+  # still gate each run they wait on (every dispatched orchestrate/Release run
+  # is wrapped in `gh run watch --exit-status`); this job is additive. It
+  # enumerates EVERY run this repo produced since window-start (captured before
+  # the first merge) and fails if any is unaccounted for in the ledger the
+  # register-run steps uploaded - an unregistered non-success run, or a
+  # registered run that concluded other than its expected conclusion. That turns
+  # any future fire-and-forget run the suite forgot to gate into a hard red.
+  reconcile:
+    name: Reconcile scenario-window runs
+    needs: [reset, prerelease, publish]
+    if: always()
+    uses: stablekernel/cascade/.github/workflows/fleet-reconcile.yaml@main
+    permissions:
+      contents: read
+      actions: read
+    with:
+      window-start: ${{ needs.reset.outputs.window_start }}
+      # Artifact mode: each register-run step uploaded a per-job ledger under
+      # the default cascade-run-ledger-* name; reconcile globs and merges them.
+      cascade-ref: main
