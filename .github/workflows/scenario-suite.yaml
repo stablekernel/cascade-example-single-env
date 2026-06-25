@@ -29,6 +29,39 @@ env:
   RELEASE_WORKFLOW: promote.yaml
 
 jobs:
+  # A single declared environment is below cascade's two-env hotfix gate, so the
+  # generator must NOT emit cascade-hotfix.yaml for this repo. This is a pure
+  # generation-shape assertion against the checked-out (fleet-repinned) workflow
+  # set: it causes no run, so there is nothing to register; the reconcile gate is
+  # unaffected. It fails hard if the hotfix workflow is ever present here.
+  hotfix-omission:
+    name: 'Stage 0: assert hotfix workflow omitted'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Assert cascade-hotfix.yaml is absent for single-env
+        shell: bash
+        run: |
+          set -euo pipefail
+          HOTFIX=".github/workflows/cascade-hotfix.yaml"
+          if [ -e "$HOTFIX" ]; then
+            echo "::error::single-env must not emit a hotfix workflow, but $HOTFIX exists"
+            ls -l "$HOTFIX" || true
+            exit 1
+          fi
+          # Defensive: no other hotfix-named workflow either.
+          STRAY="$(find .github/workflows -maxdepth 1 -iname '*hotfix*' 2>/dev/null || true)"
+          if [ -n "$STRAY" ]; then
+            echo "::error::single-env must not emit any hotfix workflow, found: $STRAY"
+            exit 1
+          fi
+          echo "OK: no hotfix workflow generated for the single-env topology"
+          {
+            echo "## Stage 0: hotfix omission"
+            echo "- cascade-hotfix.yaml absent for single-env: yes"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   reset:
     name: 'Stage 1: merge create-draft'
     runs-on: ubuntu-latest
