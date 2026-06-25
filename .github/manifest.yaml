@@ -18,14 +18,14 @@ ci:
         triggers: []
   state:
     prod:
-      sha: 430365d27a374a0c2a885ac8d59044310125eb08
-      version: v0.4.2-rc.0
-      committed_at: "2026-06-24T23:25:48Z"
+      sha: e1ac0190b92ba180927d602167ba613441de380c
+      version: v0.1.0-rc.0
+      committed_at: "2026-06-25T00:22:28Z"
       committed_by: joshua-temple
       deploys:
         app:
-          sha: 430365d27a374a0c2a885ac8d59044310125eb08
-          deployed_at: "2026-06-24T23:25:48Z"
+          sha: e1ac0190b92ba180927d602167ba613441de380c
+          deployed_at: "2026-06-25T00:22:28Z"
           deployed_by: joshua-temple
   latest_release:
     version: v0.1.0
