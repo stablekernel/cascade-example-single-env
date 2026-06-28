@@ -30,6 +30,6 @@ ci:
           deployed_by: joshua-temple
   latest_release:
     version: v0.1.0
-    sha: e2e6d91f471219ad48a76e5f4ed838e6e8479177
-    released_on: "2026-06-28T17:39:45Z"
+    sha: 9bf9f5ed36a869b0568a47fd1448918cf2703ab0
+    released_on: "2026-06-28T19:02:37Z"
     released_by: joshua-temple
