@@ -9,7 +9,16 @@ name: scenario-suite
 # never hardcoded SHAs or versions.
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      cascade_version:
+        description: 'cascade rc tag to self-repin to (e.g. v1.2.0-rc.1). Empty runs committed defaults.'
+        required: false
+        default: ''
+      cascade_version_sha:
+        description: 'Peeled commit SHA paired with cascade_version. Empty runs committed defaults.'
+        required: false
+        default: ''
   schedule:
     - cron: '0 6 * * 1'
 
@@ -73,6 +82,14 @@ jobs:
       # causes can fall outside the window.
       window_start: ${{ steps.window.outputs.window_start }}
     steps:
+      - name: Log cascade version mode
+        run: |
+          if [ -n "${{ inputs.cascade_version }}" ]; then
+            echo "Running against dispatched rc: ${{ inputs.cascade_version }} (sha ${{ inputs.cascade_version_sha }})"
+          else
+            echo "Running against committed defaults (no rc dispatched)"
+          fi
+
       - name: Install gh transient-retry wrapper
         run: |
           cat > "$RUNNER_TEMP/gh-retry.sh" <<'GHRETRY'
@@ -125,6 +142,13 @@ jobs:
         with:
           token: ${{ secrets.CASCADE_STATE_TOKEN }}
           fetch-depth: 0
+
+      - name: Self-repin manifest to the dispatched rc
+        uses: stablekernel/cascade/.github/actions/fleet-repin@main
+        with:
+          cascade_version: ${{ inputs.cascade_version }}
+          cascade_version_sha: ${{ inputs.cascade_version_sha }}
+          token: ${{ secrets.CASCADE_STATE_TOKEN }}
 
       - name: Clean slate - delete leftover releases and tags
         env:
@@ -372,7 +396,7 @@ jobs:
         uses: stablekernel/cascade/.github/actions/setup-cli@v0.8.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          version: v0.8.0
+          version: ${{ inputs.cascade_version || 'v0.8.0' }}
 
       - name: Dispatch Release with release_action=release
         id: dispatch
