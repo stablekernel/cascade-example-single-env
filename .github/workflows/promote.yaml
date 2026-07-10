@@ -101,10 +101,10 @@ jobs:
           echo "semver_tag=$SEMVER_TAG" >> "$GITHUB_OUTPUT"
           echo "::notice::Semver tag: $SEMVER_TAG (from $SOURCE_VERSION)"
       - name: Setup CLI
-        uses: stablekernel/cascade/.github/actions/setup-cli@v0.14.0-rc.0
+        uses: stablekernel/cascade/.github/actions/setup-cli@v0.14.0-dryrun.54
         with:
           token: ${{ secrets.CASCADE_STATE_TOKEN }}
-          version: v0.14.0-rc.0
+          version: v0.14.0-dryrun.54
       - name: Check Breaking Changes
         id: check
         env:
@@ -165,10 +165,10 @@ jobs:
         with:
           fetch-depth: 0
       - name: Setup CLI
-        uses: stablekernel/cascade/.github/actions/setup-cli@v0.14.0-rc.0
+        uses: stablekernel/cascade/.github/actions/setup-cli@v0.14.0-dryrun.54
         with:
           token: ${{ secrets.CASCADE_STATE_TOKEN }}
-          version: v0.14.0-rc.0
+          version: v0.14.0-dryrun.54
       - name: Generate Changelog
         id: changelog
         env:
@@ -290,13 +290,13 @@ jobs:
             echo "cascade-state-write: attempt=$attempt/10"
             git fetch origin "$BRANCH"
             git reset --hard "origin/$BRANCH"
+            BASE_SHA=$(git rev-parse "origin/$BRANCH:$MANIFEST_FILE" 2>/dev/null || true)
             apply_release_state_edits
             if git diff --quiet "$MANIFEST_FILE"; then
               echo "No latest_release state changes"
               exit 0
             fi
             CONTENT_B64=$(base64 -w0 "$MANIFEST_FILE" 2>/dev/null || base64 "$MANIFEST_FILE" | tr -d '\n')
-            CURRENT_SHA=$(gh api "repos/${{ github.repository }}/contents/$MANIFEST_FILE?ref=$BRANCH" --jq '.sha' 2>/dev/null || true)
             API_ARGS=("repos/${{ github.repository }}/contents/$MANIFEST_FILE" -X PUT
               -f "message=chore: update latest_release state Version: $SEMVER_TAG"
               -f "content=$CONTENT_B64"
@@ -305,8 +305,8 @@ jobs:
               -f "author[email]=github-actions[bot]@users.noreply.github.com"
               -f "committer[name]=github-actions[bot]"
               -f "committer[email]=github-actions[bot]@users.noreply.github.com")
-            if [[ -n "$CURRENT_SHA" ]]; then
-              API_ARGS+=(-f "sha=$CURRENT_SHA")
+            if [[ -n "$BASE_SHA" ]]; then
+              API_ARGS+=(-f "sha=$BASE_SHA")
             fi
             if gh api "${API_ARGS[@]}" >/dev/null; then
               echo "Pushed latest_release state via API on attempt $attempt"
