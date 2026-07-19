@@ -104,10 +104,10 @@ jobs:
           echo "semver_tag=$SEMVER_TAG" >> "$GITHUB_OUTPUT"
           echo "::notice::Semver tag: $SEMVER_TAG (from $SOURCE_VERSION)"
       - name: Setup CLI
-        uses: stablekernel/cascade/.github/actions/setup-cli@v0.16.5-rc.2
+        uses: stablekernel/cascade/.github/actions/setup-cli@v0.16.5-rc.1
         with:
           token: ${{ secrets.CASCADE_STATE_TOKEN }}
-          version: v0.16.5-rc.2
+          version: v0.16.5-rc.1
       - name: Check Breaking Changes
         id: check
         env:
@@ -170,10 +170,10 @@ jobs:
         with:
           fetch-depth: 0
       - name: Setup CLI
-        uses: stablekernel/cascade/.github/actions/setup-cli@v0.16.5-rc.2
+        uses: stablekernel/cascade/.github/actions/setup-cli@v0.16.5-rc.1
         with:
           token: ${{ secrets.CASCADE_STATE_TOKEN }}
-          version: v0.16.5-rc.2
+          version: v0.16.5-rc.1
       - name: Generate Changelog
         id: changelog
         env:
@@ -188,7 +188,12 @@ jobs:
           fi
           
           RESULT=$(cascade generate-changelog --base-sha "$LATEST_SHA" --head-sha "$SOURCE_SHA" --repo "${{ github.repository }}")
-          echo "$RESULT" | jq -r '.changelog' > "$RUNNER_TEMP/cascade-changelog.md"
+          CASCADE_DELIM="$(dd if=/dev/urandom bs=15 count=1 status=none | base64)"
+          {
+            echo "changelog<<${CASCADE_DELIM}"
+            echo "$RESULT" | jq -r '.changelog'
+            echo "${CASCADE_DELIM}"
+          } >> "$GITHUB_OUTPUT"
       - name: Create Draft Release
         if: ${{ github.event.inputs.release_action == 'create-draft' }}
         uses: ./.github/actions/manage-release
@@ -198,7 +203,7 @@ jobs:
           environment: draft
           sha: ${{ needs.preflight.outputs.source_sha }}
           tag: ${{ needs.preflight.outputs.semver_tag }}
-          changelog_file: ${{ runner.temp }}/cascade-changelog.md
+          changelog: ${{ steps.changelog.outputs.changelog }}
           token: ${{ secrets.CASCADE_STATE_TOKEN }}
       - name: Create Prerelease
         if: ${{ github.event.inputs.release_action == 'prerelease' }}
@@ -210,7 +215,7 @@ jobs:
           sha: ${{ needs.preflight.outputs.source_sha }}
           tag: ${{ needs.preflight.outputs.source_version }}
           new_tag: ${{ needs.preflight.outputs.semver_tag }}
-          changelog_file: ${{ runner.temp }}/cascade-changelog.md
+          changelog: ${{ steps.changelog.outputs.changelog }}
           token: ${{ secrets.CASCADE_STATE_TOKEN }}
       - name: Publish Release
         if: ${{ github.event.inputs.release_action == 'release' }}
@@ -222,7 +227,7 @@ jobs:
           sha: ${{ needs.preflight.outputs.source_sha }}
           tag: ${{ needs.preflight.outputs.semver_tag }}
           delete_tag: ${{ needs.preflight.outputs.source_version }}
-          changelog_file: ${{ runner.temp }}/cascade-changelog.md
+          changelog: ${{ steps.changelog.outputs.changelog }}
           token: ${{ secrets.CASCADE_STATE_TOKEN }}
 
   finalize:
