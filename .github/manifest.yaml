@@ -20,7 +20,7 @@ ci:
   state:
     prod:
       sha: aaa4662106cfc2f3bf10451cb56e49b5c638e614
-      version: v0.1.0-rc.0
+      version: v0.16.6-dryrun.82
       committed_at: "2026-07-20T19:00:46Z"
       committed_by: joshua-temple
       deploys:
